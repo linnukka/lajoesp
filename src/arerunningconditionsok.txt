@@ -1,0 +1,89 @@
+
+boolean arerunconditionsok()
+{
+
+  boolean retval = true;
+  boolean skipalarm = !digitalRead(skipalarmswpin);
+
+  // sendDebug("Run cond check.");
+
+  // Triori check
+  if (!triori->isRunning())
+  {
+    // sp.alarm("Triori not running!")
+    retval = false;
+  }
+  else if (!triori->isInGoodSpeed())
+  {
+    // sp.alarm("Triori speed low!")
+    retval = false;
+  }
+
+  // check both elevators
+  if (!inElevator1->isRunning())
+  {
+    // sp.alarm("Elevator 1 not running!")
+    retval = false;
+  }
+  else if (!inElevator1->isInGoodSpeed())
+  {
+    // sp.alarm("Elevator 1 speed low!")
+    retval = false;
+  }
+  if (!inElevator2->isRunning())
+  {
+    // sp.alarm("Elevator 2 not running!")
+    retval = false;
+  }
+  else if (!inElevator2->isInGoodSpeed())
+  {
+    // sp.alarm("Elevator 2 speed low!")
+    retval = false;
+  }
+
+  /*
+    // Level alarm check
+    if(digitalRead(levelalarmproxpin)){
+      if(levelalarmactive){
+        // Level alarm was active already before, second fail => emergency
+        retval = false;
+        if(!skipalarm){
+          printLn("Level alarm!", true, true);
+        }
+      } else {
+        // first level alarm => set flag and keep on
+        levelalarmactive = true;
+      }
+    } else {
+      levelalarmactive = false;
+    }
+
+
+    // External alarm check
+    if(!digitalRead(extalarmpin)){
+      if(externalalarmactive){
+        // Level alarm was active already before, second fail => emergency
+        retval = false;
+        if(!skipalarm){
+          printLn("External alarm!", true, true);
+        }
+      } else {
+        // first level alarm => set flag and keep on
+        externalalarmactive = true;
+      }
+    } else {
+      externalalarmactive = false;
+    }
+  */
+
+  if (skipalarm)
+  {
+    // Alarm skip enabled => keep running no matter what
+    // sendDebug("Alarm skipped");
+    return true;
+  }
+  else
+  {
+    return retval;
+  }
+}
