@@ -74,3 +74,7 @@ void Elevator::setMinSpeed(int minSpeed){
 int Elevator::getMinSpeed(){
     return _minSpeed;
 }
+
+boolean Elevator::getAlarm(){
+    return _beltA->getAlarm() || _beltB->getAlarm();
+}

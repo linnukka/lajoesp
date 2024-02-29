@@ -22,7 +22,7 @@ public:
     double getAverageRPM();
     boolean isInGoodSpeed();
     boolean isRunning();
-    boolean isOk();
+    boolean getAlarm();
     String getStatusString();
     String getName();
     void update();

@@ -102,6 +102,14 @@ boolean Rotator::isRunning(){
     return _running;
 }
 
+boolean Rotator::getAlarm(){
+    boolean retval = true;
+    if(isRunning() && isInGoodSpeed()){
+        retval = false;
+    }
+    return retval;
+}
+
 String Rotator::getStatusString()
 {
     return "{\"rpm\":" + String(getAverageRPM(),0) +

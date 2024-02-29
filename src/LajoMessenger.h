@@ -42,13 +42,14 @@ public:
     static Hatch::HatchCommand processCommandFromInputString(uint8_t *payload, unsigned int length, Hatch *hatch);
     static Hatch::HatchCommand lajoCallback(char *topic, uint8_t *payload, unsigned int length, Hatch *hatch);
     void setSorterStarted(boolean started);
-    void setTrioriAlarm();
-    void setBrushAlarm();
-    void setElevator1Alarm();
-    void setElevator2Alarm();
-    void setLevelAlarm();
-    void setExtAlarm();
+    void setTrioriAlarm(boolean alarm);
+    void setBrushAlarm(boolean alarm);
+    void setElevator1Alarm(boolean alarm);
+    void setElevator2Alarm(boolean alarm);
+    void setLevelAlarm(boolean alarm);
+    void setExtAlarm(boolean alarm);
     void setSkipAlarm(boolean skip);
+    void setShuttingDown(boolean shutting);
 
     void clearTrioriAlarm();
     void clearBrushAlarm();
@@ -56,6 +57,7 @@ public:
     void clearElevator2Alarm();
     void clearLevelAlarm();
     void clearExtAlarm();
+    void setAlarmCount(int count);
 
 private:
     static const int _cmdCapacity = JSON_OBJECT_SIZE(2);
@@ -68,6 +70,8 @@ private:
     boolean _extAlarm = false;
     boolean _sorterStarted = false;
     boolean _skipAlarm = false;
+    boolean _shuttingDown = false;
+    int _alarmCount = 0;
     
     //String _name = "";
 

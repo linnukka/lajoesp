@@ -3,13 +3,13 @@
 
 
 // #define host            "mosquitto"
-#define wifissidTo    		""
-#define wifipassTo    	""
+#define wifissidTo    		"Torstila"
+#define wifipassTo    	"TORSTILA"
 #define hostname    	"lajo"
 
-#define mqttserverip    "192.168.1." 
-#define mqttusername	""
-#define mqttpasswd		""
+#define mqttserverip    "192.168.1.3" 
+#define mqttusername	"torstila"
+#define mqttpasswd		"K0skenh0v1"
 #define mqttenabled		"1"
 #define mqttserver		"mosquitto"
 #define mqttport		"1883"

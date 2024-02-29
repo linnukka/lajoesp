@@ -25,6 +25,7 @@ public:
     void update();
     void setMinSpeed(int minspeed);
     int getMinSpeed();
+    boolean getAlarm();
 
 private:
     Rotator* _beltA;

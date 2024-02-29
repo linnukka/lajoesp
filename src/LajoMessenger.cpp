@@ -196,7 +196,9 @@ String LajoMessenger::getStatusString(StatusReportingObject *sros[], int len){
     // First start status and alarms:
     String retval = "{\"started\":" ;
     retval = retval + String((int)_sorterStarted) +
-                    ", \"alarms\": {\"t\":" + String((int)_trioriAlarm) +
+                    ", \"shutting\":" + String((int)_shuttingDown) +
+                    ", \"alarms\": {\"master\":" + String(_alarmCount) +
+                    ", \"t\":" + String((int)_trioriAlarm) +
                     ", \"b\":" + String((int)_brushAlarm) +
                     ", \"e1\":" + String((int)_elevator1Alarm) + 
                     ", \"e2\":" + String((int)_elevator2Alarm) +
@@ -250,16 +252,18 @@ boolean LajoMessenger::reconnect() {
 void LajoMessenger::setSorterStarted(boolean started){
     _sorterStarted = started;
 }
-void LajoMessenger::setTrioriAlarm(){_trioriAlarm = true;}
-void LajoMessenger::setBrushAlarm(){_brushAlarm = true;}
-void LajoMessenger::setElevator1Alarm(){_elevator1Alarm = true;}
-void LajoMessenger::setElevator2Alarm(){_elevator2Alarm = true;}
-void LajoMessenger::setLevelAlarm(){_levelAlarm = true;}
-void LajoMessenger::setExtAlarm(){_extAlarm = true;}
+void LajoMessenger::setTrioriAlarm(boolean alarm){_trioriAlarm = alarm;}
+void LajoMessenger::setBrushAlarm(boolean alarm){_brushAlarm = alarm;}
+void LajoMessenger::setElevator1Alarm(boolean alarm){_elevator1Alarm = alarm;}
+void LajoMessenger::setElevator2Alarm(boolean alarm){_elevator2Alarm = alarm;}
+void LajoMessenger::setLevelAlarm(boolean alarm){_levelAlarm = alarm;}
+void LajoMessenger::setExtAlarm(boolean alarm){_extAlarm = alarm;}
 void LajoMessenger::setSkipAlarm(boolean skip){_skipAlarm = skip;}
+void LajoMessenger::setShuttingDown(boolean shutting){_shuttingDown = shutting;}
 void LajoMessenger::clearTrioriAlarm(){_trioriAlarm = false;}
 void LajoMessenger::clearBrushAlarm(){_brushAlarm = false;}
 void LajoMessenger::clearElevator1Alarm(){_elevator1Alarm = false;}
 void LajoMessenger::clearElevator2Alarm(){_elevator2Alarm = false;}
 void LajoMessenger::clearLevelAlarm(){_levelAlarm = false;}
 void LajoMessenger::clearExtAlarm(){_extAlarm = false;}
+void LajoMessenger::setAlarmCount(int count){_alarmCount = count;}

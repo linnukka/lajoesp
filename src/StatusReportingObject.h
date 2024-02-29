@@ -10,6 +10,7 @@ class StatusReportingObject {
         virtual String getStatusString() = 0;
         virtual String getName() = 0;
         virtual void update() = 0;
+        virtual boolean getAlarm() = 0;
     protected:
         unsigned long _lastUpdateTime = 0;
 };

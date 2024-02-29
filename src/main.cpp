@@ -13,7 +13,7 @@
 #include <Elevator.h>
 //#include <ButSwitch.h>
 #include <LajoMessenger.h>
-#include <StatusUpdater.h>
+//#include <StatusUpdater.h>
 #include <TaskScheduler.h>
 #include <FunctionalInterrupt.h>
 
@@ -40,12 +40,15 @@ unsigned long lastAverageMillis;
 const int srolen = 5;
 StatusReportingObject *sros[srolen];
 LajoMessenger *messenger;
-StatusUpdater updater;
+// StatusUpdater updater;
 boolean openOn=false;
 boolean closeOn=false;
 boolean sorterStarted=false;
 unsigned long openPressedTime = 0;
 unsigned long closePressedTime = 0;
+int lastUpdPercentage = 0;
+int64_t outCountOnIsr = 0;
+int alarmCount = 0;
 //unsigned long openClickCounter = 0;
 //unsigned long closeClickCounter = 0;
 
@@ -107,9 +110,9 @@ Task tSorterPoweroff(poweroffdelayfromhatchcloseS * TASK_SECOND, 1, &motorPowero
 // --------------------- Task scheduler definitions end -----------------------
 
 void openSwIsr(void);
-void openReleasedIsr(void);
+//void openReleasedIsr(void);
 void closeSwIsr(void);
-void closeReleasedIsr(void);
+//void closeReleasedIsr(void);
 
 void enableMotor(){digitalWrite(motorenablerelay, HIGH);}
 void disableMotor(){digitalWrite(motorenablerelay, LOW);}
@@ -119,6 +122,8 @@ void enableElevator2(){digitalWrite(elevator2relaypin, HIGH);}
 void disableElevator2(){digitalWrite(elevator2relaypin, LOW);}
 void alarmOn(){
   digitalWrite(alarmrelpin, LOW);
+  alarmCount++;
+  messenger->setAlarmCount(alarmCount);
   #ifdef _DEBUG_
     Serial.print(millis());
     Serial.println(F(": AlarmOn."));
@@ -130,64 +135,58 @@ void alarmOff(){
     Serial.println(F(": AlarmOff."));
   #endif      
   digitalWrite(alarmrelpin, HIGH);
+  alarmCount = 0;
+  messenger->setAlarmCount(alarmCount);
 }
 
-void startOpeningHatch(){
-    //hatch->setTargetCount(hatch_hall_count_when_hatch_open);
-    hatch->setSpeed(hatchfullspeed);
-    if(hatch->startOpening()){
+void startOpeningHatch(boolean slowSpeed){
+    if(hatch->startOpening(slowSpeed)){
       // returned true, so really moving
       tOpeningPoll.enableDelayed();
-      #ifdef _VERBOSE_
-        Serial.print(millis());
-        Serial.println(F(": Long press / switch on detected, hatch opening started."));
-      #endif      
   } else {
     // hatch already fully open, so nothing to do
-    #ifdef _VERBOSE_
-      Serial.print(millis());
-      Serial.println(F(": Long press / switch on detected or open cmd reveiced, but hatch already fully open."));
-    #endif      
   }
 }
-void startClosingHatch(){
-      //hatch->setTargetCount(hatch_hall_count_when_hatch_closed);
-      hatch->setSpeed(hatchfullspeed);
-      if(hatch->startClosing()){
+void startClosingHatch(boolean slowSpeed){
+      if(hatch->startClosing(slowSpeed)){
         // returned true, so really moving
         tClosingPoll.enableDelayed();
-        #ifdef _VERBOSE_
-          Serial.print(millis());
-          Serial.println(F(": Hatch closing started."));
-        #endif      
       } else {
         // hatch already fully open, so nothing to do
-        #ifdef _VERBOSE_
-          Serial.print(millis());
-          Serial.println(F(": Long press / switch on detected or close command received, but hatch already fully closed."));
-        #endif      
       }
 }
 
 void processHatchCmd(Hatch::HatchCommand cmd){
   switch (cmd){
     case Hatch::HatchCommand::OPEN:
+        #ifdef _DEBUG_
+          Serial.print(millis());
+          Serial.println(F(": processHatchCmd cmd OPEN"));
+        #endif    
+        startOpeningHatch(false);  // Command processing already has updated target to run into
+      break;    
     case Hatch::HatchCommand::OP_STEPS:
     case Hatch::HatchCommand::OP_MM:
         #ifdef _DEBUG_
           Serial.print(millis());
-          Serial.println(F(": processHatchCmd cmd OPEN or OP_STEPS or OP_MM"));
+          Serial.println(F(": processHatchCmd cmd OP_STEPS or OP_MM"));
         #endif    
-        startOpeningHatch();  // Command processing already has updated target to run into
+        startOpeningHatch(hatch->isTargetApproaching());  // Command processing already has updated target to run into
       break;    
     case Hatch::HatchCommand::CLOSE:
+        #ifdef _DEBUG_
+          Serial.print(millis());
+          Serial.println(F(": processHatchCmd cmd CLOSE"));
+        #endif    
+        startClosingHatch(false); // Command processing already has updated target to run into
+      break;    
     case Hatch::HatchCommand::CL_STEPS:
     case Hatch::HatchCommand::CL_MM:
         #ifdef _DEBUG_
           Serial.print(millis());
           Serial.println(F(": processHatchCmd cmd CLOSE or CL_STEPS or CL_MM"));
         #endif    
-        startClosingHatch(); // Command processing already has updated target to run into
+        startClosingHatch(hatch->isTargetApproaching()); // Command processing already has updated target to run into
       break;    
     case Hatch::HatchCommand::SHAKE:
         #ifdef _DEBUG_
@@ -221,6 +220,16 @@ boolean isSkipAlarmOn(){
   boolean skip = !digitalRead(skipalarmswpin);
   messenger->setSkipAlarm(skip); 
   return skip;
+}
+boolean isExtAlarmOn(){
+  boolean ext = !digitalRead(extalarmpin);
+  messenger->setExtAlarm(ext); 
+  return ext;
+}
+boolean isLevelAlarmOn(){
+  boolean lev = !digitalRead(levelalarmproxpin);
+  messenger->setLevelAlarm(lev); 
+  return lev;
 }
 
 boolean isOpenNowOn(){return !digitalRead(openswpin);}
@@ -288,12 +297,15 @@ void setup() {
       Serial.println("Start updating " + type);
     })
     .onEnd([]() {
+      lastUpdPercentage = 0;
       Serial.println("\nEnd");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
 
-      if((progress / (total / 100)) % 10 == 0){
-        Serial.printf("%u%%\r ", (progress / (total / 100)));
+      int percentage = (progress / (total / 100)); 
+      if(percentage % 10 == 0 && percentage>lastUpdPercentage){
+        lastUpdPercentage = percentage;
+        Serial.printf("%u%%\r ", percentage);
       }
     })
     .onError([](ota_error_t error) {
@@ -341,7 +353,7 @@ void setup() {
 
   tPubsub.enableDelayed();
   //delay(5000);
-  updater.init(sros);
+  //updater.init(sros);
 
   #ifdef _DEBUG_
     Serial.print(millis());
@@ -375,6 +387,7 @@ void IRAM_ATTR ARDUINO_ISR_ATTR openSwIsr()
         // Debounce timer for either edge not running, so start now
         tOpenSwDebounceCheck.setIterations(1);
         tOpenSwDebounceCheck.enableDelayed();
+        outCountOnIsr = hatch->getOutCount();
     } else {
         // First glitch already recorded and debounce timer running => do nothing
     }
@@ -386,6 +399,7 @@ void IRAM_ATTR ARDUINO_ISR_ATTR closeSwIsr()
         // Debounce timer for either edge not running, so start now
         tCloseSwDebounceCheck.setIterations(1);
         tCloseSwDebounceCheck.enableDelayed();
+        outCountOnIsr = hatch->getOutCount();
     } else {
         // First glitch already recorded and debounce timer running => do nothing
     }
@@ -412,14 +426,14 @@ void openSwDebounceCallback(){
           // Click, so add one to counter and enable counter processing
           //openClickCounter++;
           hatch->changeTargetSteps(1);
-          hatch->setSpeed(hatchrepositionspeed);
-          hatch->startOpening();
+          startOpeningHatch(true);
+
         } else {
           // Long press end or switch off, so hatch must have been in continuous move => stop it
           #ifdef _VERBOSE_
             Serial.println("openSwDebounceCallback stopping hatch.");    
           #endif
-          hatch->stop();
+          hatch->stop(true);
           tOpeningPoll.disable();
           tRepositioningPoll.enableDelayed();
           // hatch->setTargetCount(hatch->getOutCount());
@@ -442,7 +456,7 @@ void openSwLongPressCallback(){
     #endif      
     if(getOpenOnTime()>buttonclicktimelimitms){
       hatch->setTargetCount(hatch_hall_count_when_hatch_open);
-      startOpeningHatch();
+      startOpeningHatch(false);
     } else {
         #ifdef _VERBOSE_
           Serial.print(millis());
@@ -461,7 +475,7 @@ void openingPollCallback(){
       #ifdef _VERBOSE_
         Serial.println("openingPollCallback stopping hatch.");    
       #endif
-      hatch->stop();
+      hatch->stop(false);
       tOpeningPoll.disable();
       tRepositioningPoll.enableDelayed();
       // hatch->setTargetCount(hatch->getOutCount());
@@ -493,15 +507,14 @@ void closeSwDebounceCallback(){
         if(ontime < buttonclicktimelimitms){
           // Click, so add one to counter and enable counter processing
           hatch->changeTargetSteps(-1);
-          hatch->setSpeed(hatchrepositionspeed);
-          hatch->startClosing();
+          startClosingHatch(true);
         } else {
           // Long press end or switch off, so hatch must have been in continuous move => stop it
           #ifdef _VERBOSE_
             Serial.print(millis());
             Serial.println(F(": closeSwDebounceCallback stopping hatch."));
           #endif      
-          hatch->stop();
+          hatch->stop(true);
           tClosingPoll.disable();
           tRepositioningPoll.enableDelayed();
           // hatch->setTargetCount(hatch->getOutCount());
@@ -524,7 +537,7 @@ void closeSwLongPressCallback(){
     #endif      
     if(getCloseOnTime()>buttonclicktimelimitms){
       hatch->setTargetCount(hatch_hall_count_when_hatch_closed);
-      startClosingHatch();
+      startClosingHatch(false);
     } else {
         #ifdef _VERBOSE_
           Serial.print(millis());
@@ -541,10 +554,10 @@ void closingPollCallback(){
 
     if(hatch->isHatchFullyClosed() || hatch->isTargetReached()){
       #ifdef _VERBOSE_
-        Serial.println("openingPollCallback stopping hatch.");    
+        Serial.println("closingPollCallback stopping hatch.");    
       #endif
 
-      hatch->stop();
+      hatch->stop(false);
       tClosingPoll.disable();
       tRepositioningPoll.enableDelayed();
       // hatch->setTargetCount(hatch->getOutCount());
@@ -557,29 +570,58 @@ void closingPollCallback(){
 void shutdownCallback(){
     #ifdef _DEBUG_
       Serial.print(millis());
-      Serial.println(F(": shutdownCallback TODOOOOOOOOOOOOOOOOOOOOOOOOOOOOO"));
+      Serial.println(F(": shutdownCallback starts"));
     #endif
 
-    // Close hatch
-    hatch->setTargetCount(hatch_hall_count_when_hatch_closed);
-    hatch->setSpeed(hatchfullspeed);
-    hatch->startClosing();
+    messenger->setShuttingDown(true);
 
-    // Poweroff sorter, once hatch closed, with delay
-    tSorterPoweroff.setIterations(1);
-    tSorterPoweroff.setCallback(&motorPoweroffCallback);
-    tShutdown.setInterval(TASK_IMMEDIATE);
+    if(hatch->isHatchFullyClosed()){
+      #ifdef _DEBUG_
+        Serial.print(millis());
+        Serial.println(F(": shutdownCallback Hatch closed, enable poweroff after delay."));
+      #endif
 
-    tSorterPoweroff.enable();
+      hatch->stop(false);
+
+      // Poweroff sorter, once hatch closed, with delay
+      tSorterPoweroff.setIterations(1);
+      tSorterPoweroff.setCallback(&motorPoweroffCallback);
+      tSorterPoweroff.setInterval(poweroffdelayfromhatchcloseS * TASK_SECOND);
+      tSorterPoweroff.enableDelayed();
+
+      tShutdown.setInterval(TASK_IMMEDIATE);
+      tShutdown.disable();
+
+    } else if(hatch->isClosing()){
+      // Do nothing but wait again for closure
+      tShutdown.setInterval(poweroffhatchclosedpollintms * TASK_MILLISECOND);
+      tShutdown.setIterations(TASK_FOREVER);
+      tShutdown.enableDelayed();
+
+    } else { // Hatch is not closing, so close now
+      #ifdef _DEBUG_
+        Serial.print(millis());
+        Serial.println(F(": shutdownCallback Hatch not closed, start closing."));
+      #endif
+
+      // Close hatch
+      hatch->setTargetCount(hatch_hall_count_when_hatch_closed);
+      hatch->startClosing(false);
+
+      tShutdown.setInterval(poweroffhatchclosedpollintms * TASK_MILLISECOND);
+      tShutdown.setIterations(TASK_FOREVER);
+      tShutdown.enableDelayed();
+    }
 }
 
 void motorPoweroffCallback(){
+  #ifdef _DEBUG_
+    Serial.print(millis());
+    Serial.println(F(": motorPoweroffCallback begin"));
+  #endif
     // Set sorterStarted to false and clear potential alarms;
-    #ifdef _DEBUG_
-      Serial.print(millis());
-      Serial.println(F(": motorPoweroffCallback begin"));
-    #endif
     sorterStarted = false;
+    messenger->setSorterStarted(false);
     //digitalWrite(motorenablerelay, HIGH);
     disableMotor();
 
@@ -587,11 +629,13 @@ void motorPoweroffCallback(){
     tSorterPoweroff.setCallback(&elevatorPoweroffCallback);
     tSorterPoweroff.setInterval(elevatorpowerofffrommotoroffS * TASK_SECOND);
     tSorterPoweroff.setIterations(1);
-    tSorterPoweroff.enable();
-    #ifdef _DEBUG_
-      Serial.print(millis());
-      Serial.println(F(": motorPoweroffCallback end"));
-    #endif
+    tSorterPoweroff.enableDelayed();
+  
+  #ifdef _DEBUG_
+    Serial.print(millis());
+    Serial.println(F(": motorPoweroffCallback end"));
+  #endif
+
 }
 
 void elevatorPoweroffCallback(){
@@ -610,6 +654,11 @@ void elevatorPoweroffCallback(){
     enableMotor();
     enableElevator1();
     enableElevator2();
+
+    messenger->setShuttingDown(false);
+
+    tShutdown.disable();
+    tSorterPoweroff.disable();
 
     #ifdef _DEBUG_
       Serial.print(millis());
@@ -666,12 +715,11 @@ void updateStatusForOneCallback(){
 boolean isRunningFine(){
   boolean retval = true;  // Start optimistic and then set to false if anything wrong
 
-  if(!isSkipAlarmOn()){       // Do not check anything if skip alarm on
     // Triori check
     if (!triori->isRunning()){
       Serial.print(millis());
       Serial.println(F(": Triori not running!"));
-      messenger->setTrioriAlarm();
+      //messenger->setTrioriAlarm();
       retval = false;
     } else if (!triori->isInGoodSpeed()){
       Serial.print(millis());
@@ -696,6 +744,12 @@ boolean isRunningFine(){
     if(retval && !sorterStarted){
       sorterStarted = true;
       messenger->setSorterStarted(true);
+    }
+
+    // Clear started if skipalarm on and both triori and brush stopped
+    if(isSkipAlarmOn() && !triori->isRunning() && !brush->isRunning()){
+      sorterStarted = false;
+      messenger->setSorterStarted(false);
     }
 
     // check both elevators
@@ -724,42 +778,76 @@ boolean isRunningFine(){
 
     // Level alarm check
     #ifdef _CHECK_LEVELS_
+      if(isLevelAlarmOn()){
+        Serial.print(millis());
+        Serial.println(F(": Level alarm!")); 
+        retval = false;
+      }
     #endif    
 
     // External alarm check
     #ifdef _CHECK_EXT_ALARM_
+      if(isExtAlarmOn()){
+        Serial.print(millis());
+        Serial.println(F(": Ext alarm!")); 
+        retval = false;
+      }
     #endif    
 
-  } else {
-    // Alarm skip enabled => keep running no matter what
-    // sendDebug("Alarm skipped");
-    retval = true;
-  }
-  return false;
+  return retval;
 }
 
 void statusUpdateCompletedCallback(){
+  messenger->setBrushAlarm(brush->getAlarm());
+  messenger->setTrioriAlarm(triori->getAlarm());
+  messenger->setElevator1Alarm(inElevator1->getAlarm());
+  messenger->setElevator2Alarm(inElevator2->getAlarm());
+  messenger->setSorterStarted(sorterStarted);
+  messenger->setSkipAlarm(isSkipAlarmOn());
+  messenger->setExtAlarm(isExtAlarmOn());
+  messenger->setLevelAlarm(isLevelAlarmOn());
   // Check running conditions
+
+  boolean runningFine = isRunningFine();
+
   if(sorterStarted){
     #ifdef _DEBUG_
       Serial.print(millis());
       Serial.println(F(": statusUpdateCompletedCallback sorter started"));
     #endif         
-    if(!isRunningFine()){
-      tShutdown.setIterations(1);
-      tShutdown.enable();
-      #ifdef _DEBUG_
-        Serial.print(millis());
-        Serial.println(F("But not running fine! Shutdown initiated!"));
-      #endif         
+    if(runningFine){ 
+      alarmOff();
+    } else {
+      if(!isSkipAlarmOn()){
+        alarmOn();
+        if(alarmCount>alarmcounttostartshutoff){
+          messenger->setShuttingDown(true);
+          tShutdown.setIterations(1);
+          tShutdown.enable();
+          #ifdef _DEBUG_
+            Serial.print(millis());
+            Serial.println(F(": But not running fine! Shutdown initiated!"));
+          #endif         
+        } else {
+          #ifdef _DEBUG_
+            Serial.print(millis());
+            Serial.println(F(": But not running fine! Alarm on, shutdown not initiated yet!"));
+          #endif         
+        }
+      } else {
+        #ifdef _DEBUG_
+          Serial.print(millis());
+          Serial.println(F("Not running fine, but skip alarm on, so not shutting down!"));
+        #endif         
+      }
     }
   } else { 
     #ifdef _DEBUG_
       Serial.print(millis());
       Serial.println(F(": statusUpdateCompletedCallback sorter NOT started"));
     #endif         
-    isSkipAlarmOn(); 
-  } // just to update switch status
+    isSkipAlarmOn(); // just to update switch status
+  } 
   // All status reporting objects looped => enable message prep and then sending
   tPrepareStatusMsg.setIterations(1);
   tPrepareStatusMsg.enable();

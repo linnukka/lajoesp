@@ -12,30 +12,17 @@
 Hatch::Hatch(){}
 
 void Hatch::init(){
-    pinMode(retractpwmpin, OUTPUT);
-    pinMode(extendpwmpin, OUTPUT);
-    // pinMode(hatchpwmpin, OUTPUT);
+    pinMode(retractpin, OUTPUT);
+    pinMode(extendpin, OUTPUT);
     pinMode(hatchspeedpin, OUTPUT);
     pinMode(outerlimitpin, INPUT_PULLUP);
     pinMode(innerlimitpin, INPUT_PULLUP);
     pinMode(hall1pin, INPUT);
     pinMode(hall2pin, INPUT);
 
-    _em241pwmExtend = new ESP32_FAST_PWM(extendpwmpin, em241pwmfreq, 0.0f, hatchextendpwmchannel, hatchpwmresolution);
-    _em241pwmRetract = new ESP32_FAST_PWM(retractpwmpin, em241pwmfreq, 0.0f, hatchretractpwmchannel, hatchpwmresolution);
-
-    if (_em241pwmExtend){
-        boolean setSuccess = _em241pwmExtend->setPWM(extendpwmpin, em241pwmfreq, 0.0f);
-        #ifdef _VERBOSE_
-            Serial.println("Setup: _em241pwmExtend exists, setPWM fine: " + String(setSuccess));
-        #endif
-    }
-    if (_em241pwmRetract){
-        boolean setSuccess = _em241pwmRetract->setPWM(retractpwmpin, em241pwmfreq, 0.0f);
-        #ifdef _VERBOSE_
-            Serial.println("Setup: _em241pwmRetract exists, setPWM fine: " + String(setSuccess));
-        #endif
-    }
+    digitalWrite(extendpin, LOW);
+    digitalWrite(retractpin, LOW);
+    digitalWrite(hatchspeedpin, LOW);
 
 	ESP32Encoder::useInternalWeakPullResistors = puType::NONE;
 	// use pin 19 and 18 for the first encoder
@@ -58,13 +45,11 @@ Hatch::~Hatch()
 {
 }
 
-void Hatch::setSpeed(float speed)
-{
-    if(speed>=0.0f && speed <=100.0f){
-        _speed = speed;
-    } else {
-        Serial.println("Invalid speed setting: " + String(speed));  
-    }
+void Hatch::setSlowSpeed(boolean slowSpeed){
+    #ifdef _DEBUG_
+        Serial.println("setSlowSpeed: " + String(slowSpeed));
+    #endif
+    slowSpeed ? digitalWrite(hatchspeedpin, LOW) : digitalWrite(hatchspeedpin, HIGH);
 }
 int64_t Hatch::getTargetCount(){
        return _targetCount;
@@ -102,13 +87,53 @@ Hatch::HatchCommand Hatch::setTargetMm(double targetMm){
     return setTargetCount(targetMm/hatch_mm_per_count);
 }
 Hatch::HatchCommand Hatch::changeTargetSteps(int steps){
-    return setTargetCount(_targetCount + steps*steplengthpulses); 
+    //int64_t before = getOutCount();     // Change from prev target or outCount?
+    int64_t before = _targetCount;
+    int64_t delta = steps*steplengthpulses;
+    int64_t newTarget = before + delta;
+    #ifdef _DEBUG_
+        Serial.println("changeTargetSteps: " + String(steps) + "count changing by: " + String(delta) + 
+        " from: " + String(before));
+    #endif
+
+    if(newTarget < 0){
+        newTarget = 0;
+        #ifdef _DEBUG_
+            Serial.println("changeTargetSteps: Targetting 0.");
+        #endif
+    } else if(newTarget > hatch_hall_count_when_hatch_open){
+        newTarget = hatch_hall_count_when_hatch_open;
+        #ifdef _DEBUG_
+            Serial.println("changeTargetSteps: Targetting fully open.");
+        #endif
+    }
+
+    return setTargetCount(newTarget); 
 }
 Hatch::HatchCommand Hatch::changeTargetMm(double mm){
+    //int64_t before = getOutCount();     // Change from prev target or outCount?
+    int64_t before = _targetCount;
+    int64_t delta = mm/hatch_mm_per_count;
+    int64_t newTarget = before + delta;
+
     #ifdef _DEBUG_
-        Serial.println("changeTargetMm: " + String(mm) + "count changing by: " + String((mm/hatch_mm_per_count)));
+        Serial.println("changeTargetMm: " + String(mm) + "count changing by: " + String(delta) + 
+        " from: " + String(before));
     #endif
-    return setTargetCount(_targetCount + mm/hatch_mm_per_count); 
+
+    if(newTarget < 0){
+        newTarget = 0;
+        #ifdef _DEBUG_
+            Serial.println("changeTargetMm: Targetting 0.");
+        #endif
+    } else if(newTarget > hatch_hall_count_when_hatch_open){
+        newTarget = hatch_hall_count_when_hatch_open;
+        #ifdef _DEBUG_
+            Serial.println("changeTargetMm: Targetting fully open.");
+        #endif
+    }
+
+    return setTargetCount(newTarget); 
 }
 
 boolean Hatch::isTargetReached(){
@@ -119,8 +144,8 @@ boolean Hatch::isTargetReached(){
         if((outCountNow <= _targetCount && _targetCount > hatch_hall_count_when_hatch_closed)  // Request is not to close fully
                 || isHatchFullyClosed()){   // Request is to close fully
             retval = true;
-        } else if (_armPosZeroed && outCountNow < (_targetCount+hatchslowdownadvance)){ // Not in target yet but close -> slow down
-            //_em241pwmExtend->setPWM_DCPercentage_manual(extendpwmpin, hatchapproachspeed);
+        } else if (isTargetApproaching()){ // Not in target yet but close -> slow down
+            setSlowSpeed(true);
             #ifdef _DEBUG_
                 Serial.println("isTargetReached() closing approaching.");    
             #endif
@@ -130,8 +155,8 @@ boolean Hatch::isTargetReached(){
         if((outCountNow >= _targetCount && _targetCount < hatch_hall_count_when_hatch_open) // Request is not to open fully
         || isHatchFullyOpen()) { // Request is to open fully
             retval = true;
-        } else if (_armPosZeroed && outCountNow > (_targetCount-hatchslowdownadvance)){ // Not in target yet but close -> slow down
-            //_em241pwmRetract->setPWM_DCPercentage_manual(retractpwmpin, hatchapproachspeed);
+        } else if (isTargetApproaching()){ // Not in target yet but close -> slow down
+            setSlowSpeed(true);
             #ifdef _DEBUG_
                 Serial.println("isTargetReached() opening approaching.");    
             #endif
@@ -145,7 +170,7 @@ boolean Hatch::isTargetReached(){
 }
 
 
-boolean Hatch::startClosing() // Close hatch, ie. extend arm
+boolean Hatch::startClosing(boolean slowSpeed) // Close hatch, ie. extend arm
 {
     #ifdef _VERBOSE_
         Serial.println("startClosing. Already in: " + String(_isClosedArmOut));
@@ -153,26 +178,22 @@ boolean Hatch::startClosing() // Close hatch, ie. extend arm
 
     if (!_isClosedArmOut) {
         if(!isClosing()){
-            // _targetCount = outCountBefore + steps;
+
+            setSlowSpeed(slowSpeed);
+
             #ifdef _VERBOSE_
                 int64_t outCountBefore = _hallEncoder.getCount();
-                Serial.print("Start moving out i.e. extending i.e. closing hatch. Speed: ");
-                Serial.print(_speed);
+                Serial.print("Start moving out i.e. extending i.e. closing hatch. Slow speed: ");
+                Serial.print(isSlowSpeedOn());
                 Serial.print(" targetCount: ");
                 Serial.print(_targetCount);
                 Serial.print(" outCount before: ");
                 Serial.println(outCountBefore);
             #endif
 
-            boolean setSuccess = _em241pwmRetract->setPWM_DCPercentage_manual(retractpwmpin,0.0f);           // make sure retracting is not on!
-            // #ifdef _VERBOSE_
-            //     Serial.println("_em241pwmRetract->setPWM_DCPercentage_manual returned: " + String(setSuccess));
-            // #endif
+            digitalWrite(retractpin, LOW); // make sure retracting is not on!
+            digitalWrite(extendpin, HIGH); // make sure retracting is not on!
 
-            setSuccess = _em241pwmExtend->setPWM_DCPercentage_manual(extendpwmpin,_speed);
-            // #ifdef _VERBOSE_
-            //     Serial.println("_em241pwmExtend->setPWM_DCPercentage_manual returned: " + String(setSuccess));
-            // #endif
        }
         return true;
     } else {
@@ -183,7 +204,7 @@ boolean Hatch::startClosing() // Close hatch, ie. extend arm
         return false;
     }
 }
-boolean Hatch::startOpening() // Close hatch, ie. extend arm
+boolean Hatch::startOpening(boolean slowSpeed) // Close hatch, ie. extend arm
 {
     #ifdef _VERBOSE_
         Serial.println("startOpening. Already in: " + String(_isOpenArmIn));
@@ -191,25 +212,22 @@ boolean Hatch::startOpening() // Close hatch, ie. extend arm
 
     if (!_isOpenArmIn) {
         if(!isOpening()){
-            // _targetCount = outCountBefore + steps;
+
+            setSlowSpeed(slowSpeed);
+
             #ifdef _VERBOSE_
                 int64_t outCountBefore = _hallEncoder.getCount();
-                Serial.print("Start moving in i.e. retracting i.e. opening hatch. Speed: ");
-                Serial.print(_speed);
+                Serial.print("Start moving in i.e. retracting i.e. opening hatch. Slow speed: ");
+                Serial.print(isSlowSpeedOn());
                 Serial.print(" targetCount: ");
                 Serial.print(_targetCount);
                 Serial.print(" outCount before: ");
                 Serial.println(outCountBefore);
             #endif
 
-            boolean setSuccess = _em241pwmExtend->setPWM_DCPercentage_manual(extendpwmpin,0.0f);           // make sure extending is not on!
-            //  #ifdef _VERBOSE_
-            //     Serial.println("_em241pwmExtend->setPWM_DCPercentage_manual returned: " + String(setSuccess));
-            // #endif
-           setSuccess = _em241pwmRetract->setPWM_DCPercentage_manual(retractpwmpin,_speed);
-            // #ifdef _VERBOSE_
-            //     Serial.println("_em241pwmRetract->setPWM_DCPercentage_manual returned: " + String(setSuccess));
-            // #endif
+            digitalWrite(extendpin, LOW); // make sure retracting is not on!
+            digitalWrite(retractpin, HIGH); // make sure retracting is not on!
+
         }
         return true;
     } else {
@@ -221,15 +239,19 @@ boolean Hatch::startOpening() // Close hatch, ie. extend arm
     }
 }
 
-void Hatch::stop(){     // Stops hatch movement and sets _targetCount to that of stopping time actual
+void Hatch::stop(boolean resetTarget){     // Stops hatch movement and sets _targetCount to that of stopping time actual
         int64_t currentOutCount = _hallEncoder.getCount();
         #ifdef _DEBUG_
-            Serial.println("stop(). TargetCount: " + String(_targetCount) + " Count now: " + String(currentOutCount) );
+            Serial.println("stop(). TargetCount: " + String(_targetCount) + " Count now: " + String(currentOutCount) +
+            " reset after: " + String(resetTarget));
         #endif
-        _em241pwmRetract->setPWM_DCPercentage_manual(retractpwmpin,0.0f);
-        _em241pwmExtend->setPWM_DCPercentage_manual(extendpwmpin,0.0f);
 
-        _targetCount = currentOutCount;
+        digitalWrite(extendpin, LOW); // make sure retracting is not on!
+        digitalWrite(retractpin, LOW); // make sure retracting is not on!
+
+        if(resetTarget){
+            _targetCount = currentOutCount;
+        }
 
         #ifdef _TEST_POS_ERR_
             if(_testPosErr == 0){
@@ -295,16 +317,21 @@ float Hatch::getOpeningInMm(){
 
 String Hatch::getStatusString()
 {
+
+    boolean fullyClosed = isHatchFullyClosed();
+    boolean fullyOpen = isHatchFullyOpen();
+    boolean closing = isClosing();
+    boolean opening = isOpening();
     return "{\"outcount\":" + String(getOutCount()) + 
                 ",\"target\":" + String(_targetCount) +    
                 ",\"posmm\":" + String(getOpeningInMm(),0) +    
-                ",\"closed\":" + int(isHatchFullyClosed()) +
-                ",\"open\":" + int(isHatchFullyOpen()) +
+                ",\"closed\":" + int(fullyClosed) +
+                ",\"open\":" + int(fullyOpen) +
                 ",\"zeroed\":" + int(_armPosZeroed) +
-                ",\"opening\":" + int(isOpening()) +
-                ",\"closing\":" + int(isClosing()) +
+                ",\"opening\":" + int(opening) +
+                ",\"closing\":" + int(closing) +
                 // ",\"fault\":" + int(getHatchFault()) +
-                ",\"spd\":" + String(_speed) +
+                ",\"lspd\":" + String(isSlowSpeedOn()) +
             "}";
 }
 
@@ -321,32 +348,11 @@ String Hatch::getName(){
 boolean Hatch::isMoving(){
     return isClosing() || isOpening();
 }
-boolean Hatch::isClosing(){
-    // #ifdef _VERBOSE_
-    //     Serial.println("---------------------- isClosing ------------------------------");
-    //     printPWMInfo(_em241pwmExtend);
-    // #endif
-    return _em241pwmExtend->getActualDutyCycle() > 0.0f ? true : false;
+boolean Hatch::isClosing(){ 
+    return digitalRead(extendpin);
 }
 boolean Hatch::isOpening(){
-    // #ifdef _VERBOSE_
-    //     Serial.println("---------------------- isOpening ------------------------------");
-    //     printPWMInfo(_em241pwmRetract);
-    // #endif
-    return _em241pwmRetract->getActualDutyCycle() > 0.0f ? true : false;
-}
-
-void Hatch::printPWMInfo(ESP32_FAST_PWM* PWM_Instance)
-{
-  Serial.print("Actual data: pin = ");
-  Serial.print(PWM_Instance->getPin());
-  Serial.print(", PWM DC = ");
-  Serial.print(PWM_Instance->getActualDutyCycle());
-  Serial.print(", PWMPeriod = ");
-  Serial.print(PWM_Instance->getPWMPeriod());
-  Serial.print(", PWM Freq (Hz) = ");
-  Serial.println(PWM_Instance->getActualFreq(), 4);
-  Serial.println("----------------------------------------------------");
+    return digitalRead(retractpin);
 }
 
 void Hatch::testingOutcountManipulate(){
@@ -367,21 +373,36 @@ boolean Hatch::repostionHatchToTarget(){
         #ifdef _DEBUG_
             Serial.println("repostionHatchToTarget within tolerance, done!");
         #endif
-        stop();
+        stop(false);
         retval = true;
     } else if(_targetCount>currentOutCount){
         #ifdef _DEBUG_
             Serial.println("repostionHatchToTarget. opening.");
         #endif
-        setSpeed(hatchrepositionspeed);
-        startOpening();
+        startOpening(true);
     } else {
         #ifdef _DEBUG_
             Serial.println("repostionHatchToTarget. closing.");
         #endif
-        setSpeed(hatchrepositionspeed);
-        startClosing();
+        startClosing(true);
     }
 
+    return retval;
+}
+
+boolean Hatch::getAlarm(){return false;}
+boolean Hatch::isSlowSpeedOn(){return !digitalRead(hatchspeedpin);}
+
+boolean Hatch::isTargetApproaching(){
+    boolean retval = false;
+    if(_armPosZeroed){
+        int64_t outCountNow = getOutCount();   
+        if ( (outCountNow > (_targetCount-hatchslowdownadvance))   && (outCountNow < (_targetCount+hatchslowdownadvance)) ){
+            retval = true;
+            #ifdef _VERBOSE_
+                Serial.println("isTargetApproaching. Yes it is.");
+            #endif
+        }
+    }
     return retval;
 }

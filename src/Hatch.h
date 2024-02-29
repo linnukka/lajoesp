@@ -5,7 +5,7 @@
 
 #include <Arduino.h>
 #include <SerialPrinter.h>
-#include "ESP32_FastPWM.h"
+//#include "ESP32_FastPWM.h"
 #include <ESP32Encoder.h>
 #include <StatusReportingObject.h>
 
@@ -34,16 +34,16 @@ public:
     // void close(int64_t steps, boolean pollSwitch);
     // void open(int64_t steps);
     // void open(int64_t steps, boolean pollSwitch);
-    boolean startClosing(); // return true if started, false if already closed
-    boolean startOpening(); // return true if started, false if already open
-    void stop();    
+    boolean startClosing(boolean slowSpeed); // return true if started, false if already closed
+    boolean startOpening(boolean slowSpeed); // return true if started, false if already open
+    void stop(boolean resetTarget);    
     // void openFully(boolean pollSwitch);
     int64_t getOutCount();
     float getOpeningInMm();
 
     boolean isHatchFullyOpen();
     boolean isHatchFullyClosed();
-    void setSpeed(float speed);
+    void setSlowSpeed(boolean slowSpeed);
     String getStatusString();
     String getName();
     void update();
@@ -59,6 +59,9 @@ public:
     //void outputPwmForTesting(int speed);
     void testingOutcountManipulate();
     boolean repostionHatchToTarget();
+    boolean getAlarm();
+    boolean isSlowSpeedOn();
+    boolean isTargetApproaching();
     //boolean getHatchFault();
 
 private:
@@ -72,12 +75,7 @@ private:
     boolean _armPosZeroed = false;
     int64_t _targetCount;
 
-    float _speed = 100.0f;
-    ESP32_FAST_PWM* _em241pwmRetract;
-    ESP32_FAST_PWM* _em241pwmExtend;
     ESP32Encoder _hallEncoder;
-    void printPWMInfo(ESP32_FAST_PWM* PWM_Instance);
-
 };
 
 #endif

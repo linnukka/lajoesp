@@ -11,8 +11,7 @@
 #define uart1txpin       22 // ?????  EM241 pin 10    ------------------------------------ TODO free up to something else -------------------------------
                         // DO NOT USE  //#define extenddirpin         1  // EM241 pin 9
                         // DO NOT USE  //#define hatchpwmpin          3     // EM241 pin 12, 2 kHz
-#define extendpwmpin         21  // EM241 pin 9
-//#define retractpwmpin        21 // EM241 pin 10
+#define extendpin         21  // EM241 pin 9
                         // GND
 #define outerlimitpin       19     // violet, R1 ?  
 #define innerlimitpin       18     //white, R2 ? // green, screw 10, Proximity switch used to limit hatch opening movement, closing controlled by built-in limit in motor
@@ -22,7 +21,7 @@
 #define skipalarmswpin      16    // yellow, Screw 2
 
 // 20240127 Wire buttons in parallel with Switch and check usage in code free up 2 pins as 1&3 are nogo
-#define retractpwmpin        4     // EM241 pin 10, 2 kHz
+#define retractpin        4     // EM241 pin 10, 2 kHz
 #define hatchspeedpin       0  // EM241 pin 13
 
 #define brushproxpin        2     // PIN 12 TO OUTPUT USE, prevents flashing!
