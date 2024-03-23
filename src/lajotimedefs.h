@@ -13,11 +13,19 @@
 #define buttondebouncetimems            50   
 
 // ----------------- Speed limits ------------------------
+//                                         // SPEEDS FOR TESTING, 4,0V for fan too low
+// #define trioriminspeeddefault           1700 // 8   // Minimum number of pulses before alarm
+// #define brushminspeeddefault            900 // 8   // Minimum number of pulses before alarm
+// #define elevator1minspeeddefault        1700      
+// #define elevator2minspeeddefault        1700   
+
+// ----------------- Speed limits ------------------------
                                         // SPEEDS FOR TESTING, 4,0V for fan too low
-#define trioriminspeeddefault           1700 // 8   // Minimum number of pulses before alarm
-#define brushminspeeddefault            900 // 8   // Minimum number of pulses before alarm
-#define elevator1minspeeddefault        1700      
-#define elevator2minspeeddefault        1700   
+#define trioriminspeeddefault           650 // 740 idle running speed   // Minimum number of pulses before alarm
+#define brushminspeeddefault            10 // 24 idle   // Minimum number of pulses before alarm
+#define elevator1minspeeddefault        250 // 340 idle      
+#define elevator2minspeeddefault        250    
+
 
 // ----------------- TASK Scheduler ------------------------
 #define updateStatusIntervalS           15    
@@ -27,7 +35,8 @@
 #define serialpollingintervalms         500
 #define otahandleintervalms             5000
 #define poweroffhatchclosedpollintms    1000
-#define poweroffdelayfromhatchcloseS    10
+//#define poweroffdelayfromhatchcloseS    10
+#define poweroffdelayfromhatchcloseS    300
 #define poweroffdisablerelaysperiodms   2000
 #define elevatorpowerofffrommotoroffS   10  
 
