@@ -4,7 +4,6 @@
 #define usbSerialBaudrate 115200 // Serial speed USB
 #define updateintervaldefault 15000
 
-//
 //ledc: 0  => Group: 0, Channel: 0, Timer: 0
 //#define hatchextendpwmchannel      0  // Not pin, but channel: For ESP32_S2, ESP32_S3, number of channels is 8, max 20-bit resolution
 //ledc: 1  => Group: 0, Channel: 1, Timer: 0
