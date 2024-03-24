@@ -197,8 +197,8 @@ String LajoMessenger::getStatusString(StatusReportingObject *sros[], int len){
     String retval = "{\"started\":" ;
     retval = retval + String((int)_sorterStarted) +
                     ", \"shutting\":" + String((int)_shuttingDown) +
-                    ", \"reason\":" + _shutReason + 
-                    ", \"alarms\": {\"master\":" + String(_alarmCount) +
+                    ", \"reason\":\"" + _shutReason + 
+                    "\", \"alarms\": {\"master\":" + String(_alarmCount) +
                     ", \"t\":" + String((int)_trioriAlarm) +
                     ", \"b\":" + String((int)_brushAlarm) +
                     ", \"e1\":" + String((int)_elevator1Alarm) + 
