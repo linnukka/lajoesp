@@ -130,7 +130,7 @@ void alarmOn(){
   #endif      
 }
 void alarmOff(){
-  #ifdef _DEBUG_
+  #ifdef _VERBOSE_
     Serial.print(millis());
     Serial.println(F(": AlarmOff."));
   #endif      
@@ -813,7 +813,7 @@ void statusUpdateCompletedCallback(){
   boolean runningFine = isRunningFine();
 
   if(sorterStarted){
-    #ifdef _DEBUG_
+    #ifdef _VERBOSE_
       Serial.print(millis());
       Serial.println(F(": statusUpdateCompletedCallback sorter started"));
     #endif         
