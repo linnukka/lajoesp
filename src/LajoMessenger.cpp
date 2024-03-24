@@ -197,6 +197,7 @@ String LajoMessenger::getStatusString(StatusReportingObject *sros[], int len){
     String retval = "{\"started\":" ;
     retval = retval + String((int)_sorterStarted) +
                     ", \"shutting\":" + String((int)_shuttingDown) +
+                    ", \"reason\":" + _shutReason + 
                     ", \"alarms\": {\"master\":" + String(_alarmCount) +
                     ", \"t\":" + String((int)_trioriAlarm) +
                     ", \"b\":" + String((int)_brushAlarm) +
@@ -267,3 +268,4 @@ void LajoMessenger::clearElevator2Alarm(){_elevator2Alarm = false;}
 void LajoMessenger::clearLevelAlarm(){_levelAlarm = false;}
 void LajoMessenger::clearExtAlarm(){_extAlarm = false;}
 void LajoMessenger::setAlarmCount(int count){_alarmCount = count;}
+void LajoMessenger::setShutReason(String reason){_shutReason = reason;}

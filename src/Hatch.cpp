@@ -192,7 +192,7 @@ boolean Hatch::startClosing(boolean slowSpeed) // Close hatch, ie. extend arm
             #endif
 
             digitalWrite(retractpin, LOW); // make sure retracting is not on!
-            digitalWrite(extendpin, HIGH); // make sure retracting is not on!
+            digitalWrite(extendpin, HIGH); 
 
        }
         return true;

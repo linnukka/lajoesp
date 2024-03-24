@@ -50,6 +50,7 @@ public:
     void setExtAlarm(boolean alarm);
     void setSkipAlarm(boolean skip);
     void setShuttingDown(boolean shutting);
+    void setShutReason(String reason);
 
     void clearTrioriAlarm();
     void clearBrushAlarm();
@@ -62,6 +63,7 @@ public:
 private:
     static const int _cmdCapacity = JSON_OBJECT_SIZE(2);
     String _statusMessage;
+    String _shutReason;
     boolean _trioriAlarm = false;
     boolean _brushAlarm = false;
     boolean _elevator1Alarm = false;

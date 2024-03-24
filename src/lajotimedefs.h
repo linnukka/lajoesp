@@ -2,7 +2,7 @@
 #define LAJOTIMEDEFS
 
 #define usbSerialBaudrate 115200 // Serial speed USB
-#define updateintervaldefault 15000
+#define updateintervaldefault 10000
 
 // com test
 //ledc: 0  => Group: 0, Channel: 0, Timer: 0
@@ -62,7 +62,7 @@
 #define hatchslowdownadvance            150
 
 // ---------- alarm --------------
-#define alarmcounttostartshutoff        1   // 1 allows one status update of alarm before shutoff  
+#define alarmcounttostartshutoff        3   // 1 allows one status update of alarm before shutoff  
 
 // ---------- testing ------------
 #define hatchsimulatorintervalms        200

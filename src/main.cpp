@@ -22,8 +22,8 @@
 #define _CHECK_BRUSH_
 #define _CHECK_ELEVATOR1_
 #define _CHECK_ELEVATOR2_
-#define _CHECK_EXT_ALARM_
-#define _CHECK_LEVELS_
+//#define _CHECK_EXT_ALARM_
+//#define _CHECK_LEVELS_
 //#define _HATCH_SIMULATOR_
 //#define _USERTCMILLIS_
 
@@ -199,6 +199,7 @@ void processHatchCmd(Hatch::HatchCommand cmd){
           Serial.print(millis());
           Serial.println(F(": processHatchCmd cmd SHUTDOWN"));
         #endif    
+        messenger->setShutReason("cmd");
         tShutdown.setIterations(1);
         tShutdown.enable();
         tShutdown.forceNextIteration();
@@ -573,7 +574,7 @@ void shutdownCallback(){
       Serial.println(F(": shutdownCallback starts"));
     #endif
 
-    messenger->setShuttingDown(true);
+    //messenger->setShuttingDown(true);
 
     if(hatch->isHatchFullyClosed()){
       #ifdef _DEBUG_
@@ -589,6 +590,7 @@ void shutdownCallback(){
       tSorterPoweroff.setInterval(poweroffdelayfromhatchcloseS * TASK_SECOND);
       tSorterPoweroff.enableDelayed();
 
+      tShutdown.disable();
       tShutdown.setInterval(TASK_IMMEDIATE);
       tShutdown.disable();
 
@@ -822,6 +824,7 @@ void statusUpdateCompletedCallback(){
         alarmOn();
         if(alarmCount>alarmcounttostartshutoff){
           messenger->setShuttingDown(true);
+          messenger->setShutReason("alarm");
           tShutdown.setIterations(1);
           tShutdown.enable();
           #ifdef _DEBUG_
