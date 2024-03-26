@@ -200,10 +200,27 @@ void processHatchCmd(Hatch::HatchCommand cmd){
           Serial.println(F(": processHatchCmd cmd SHUTDOWN"));
         #endif    
         messenger->setShutReason("cmd");
+        messenger->setShuttingDown(true);
         tShutdown.setIterations(1);
+        tShutdown.setCallback(&shutdownCallback);
         tShutdown.enable();
         tShutdown.forceNextIteration();
       break;    
+    case Hatch::HatchCommand::CANCEL_SHUTDOWN:
+        #ifdef _DEBUG_
+          Serial.print(millis());
+          Serial.println(F(": processHatchCmd cmd CANCEL_SHUTDOWN"));
+        #endif    
+        messenger->setShutReason("");
+        messenger->setShuttingDown(false);
+
+        tShutdown.setInterval(TASK_IMMEDIATE);
+        tShutdown.setIterations(1);
+        tShutdown.setCallback(&shutdownCallback);
+        tShutdown.disable();
+        tSorterPoweroff.disable();
+
+      break;         
     default:
         #ifdef _DEBUG_
           Serial.print(millis());
@@ -585,6 +602,7 @@ void shutdownCallback(){
       hatch->stop(false);
 
       // Poweroff sorter, once hatch closed, with delay
+      messenger->setShuttingDown(true); // Call again to update shutting down at millis
       tSorterPoweroff.setIterations(1);
       tSorterPoweroff.setCallback(&motorPoweroffCallback);
       tSorterPoweroff.setInterval(poweroffdelayfromhatchcloseS * TASK_SECOND);

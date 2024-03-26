@@ -24,6 +24,7 @@ public:
         SET_POS,
         SHAKE,
         SHUTDOWN,        
+        CANCEL_SHUTDOWN,        
     };
 
 

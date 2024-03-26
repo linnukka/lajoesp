@@ -109,6 +109,11 @@ Hatch::HatchCommand LajoMessenger::processCommandFromInputString(uint8_t *payloa
             #ifdef _VERBOSE_
                 Serial.println("Shutdown time!");
             #endif
+        } else if(cmd.equals(cancelshutdowncmd)){
+            retval = Hatch::HatchCommand::CANCEL_SHUTDOWN;
+            #ifdef _VERBOSE_
+                Serial.println("Cancel Shutdown!");
+            #endif
         }
     }
 
@@ -193,10 +198,17 @@ void LajoMessenger::sendStatus(){
 
 String LajoMessenger::getStatusString(StatusReportingObject *sros[], int len){
 
+    String shuttingDownIn = "";
+    if(_shuttingDown){
+        shuttingDownIn = String((int)(_shutdownAtMillis - millis())/1000);
+    }
+
+
     // First start status and alarms:
     String retval = "{\"started\":" ;
     retval = retval + String((int)_sorterStarted) +
                     ", \"shutting\":" + String((int)_shuttingDown) +
+                    ", \"sh_in\":" + shuttingDownIn +
                     ", \"reason\":\"" + _shutReason + 
                     "\", \"alarms\": {\"master\":" + String(_alarmCount) +
                     ", \"t\":" + String((int)_trioriAlarm) +
@@ -260,7 +272,16 @@ void LajoMessenger::setElevator2Alarm(boolean alarm){_elevator2Alarm = alarm;}
 void LajoMessenger::setLevelAlarm(boolean alarm){_levelAlarm = alarm;}
 void LajoMessenger::setExtAlarm(boolean alarm){_extAlarm = alarm;}
 void LajoMessenger::setSkipAlarm(boolean skip){_skipAlarm = skip;}
-void LajoMessenger::setShuttingDown(boolean shutting){_shuttingDown = shutting;}
+void LajoMessenger::setShuttingDown(boolean shutting){
+    _shuttingDown = shutting;
+    if(shutting){
+        //if(_shutdownAtMillis == 0){
+        _shutdownAtMillis = millis() + poweroffdelayfromhatchcloseS*1000;  // from hatch closed: Motor poweroff delay
+        //}
+    } else {
+        _shutdownAtMillis = 0;
+    }
+}
 void LajoMessenger::clearTrioriAlarm(){_trioriAlarm = false;}
 void LajoMessenger::clearBrushAlarm(){_brushAlarm = false;}
 void LajoMessenger::clearElevator1Alarm(){_elevator1Alarm = false;}

@@ -19,6 +19,7 @@
 #define poscmd      "pos"
 #define shakecmd    "shake"
 #define shutdowncmd "shutdown"
+#define cancelshutdowncmd "cancelshutdown"
 #define valuestep   "st"
 #define valuemm     "mm"
 
@@ -74,6 +75,7 @@ private:
     boolean _skipAlarm = false;
     boolean _shuttingDown = false;
     int _alarmCount = 0;
+    unsigned long _shutdownAtMillis = 0;
     
     //String _name = "";
 
