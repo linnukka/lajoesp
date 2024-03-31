@@ -120,15 +120,13 @@ void enableElevator1(){digitalWrite(elevator1relaypin, HIGH);}
 void disableElevator1(){digitalWrite(elevator1relaypin, LOW);}
 void enableElevator2(){digitalWrite(elevator2relaypin, HIGH);}
 void disableElevator2(){digitalWrite(elevator2relaypin, LOW);}
-void alarmOn(){
-  digitalWrite(alarmrelpin, LOW);
-  alarmCount++;
-  messenger->setAlarmCount(alarmCount);
-  #ifdef _DEBUG_
-    Serial.print(millis());
-    Serial.println(F(": AlarmOn."));
-  #endif      
+
+boolean isSkipAlarmOn(){
+  boolean skip = !digitalRead(skipalarmswpin);
+  messenger->setSkipAlarm(skip); 
+  return skip;
 }
+
 void alarmOff(){
   #ifdef _VERBOSE_
     Serial.print(millis());
@@ -137,6 +135,25 @@ void alarmOff(){
   digitalWrite(alarmrelpin, HIGH);
   alarmCount = 0;
   messenger->setAlarmCount(alarmCount);
+}
+
+
+void alarmOn(){
+  if(!isSkipAlarmOn()){
+    digitalWrite(alarmrelpin, LOW);
+    alarmCount++;
+    messenger->setAlarmCount(alarmCount);
+    #ifdef _DEBUG_
+      Serial.print(millis());
+      Serial.println(F(": AlarmOn."));
+    #endif      
+  } else {
+    #ifdef _DEBUG_
+      Serial.print(millis());
+      Serial.println(F(": AlarmOn. Skip alarm on, so clear count and do not alarm!"));
+    #endif      
+    alarmOff();
+  }
 }
 
 void startOpeningHatch(boolean slowSpeed){
@@ -234,11 +251,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length){
   processHatchCmd(messenger->lajoCallback(topic, payload, length, hatch));
 }
 
-boolean isSkipAlarmOn(){
-  boolean skip = !digitalRead(skipalarmswpin);
-  messenger->setSkipAlarm(skip); 
-  return skip;
-}
+
 boolean isExtAlarmOn(){
   boolean ext = !digitalRead(extalarmpin);
   messenger->setExtAlarm(ext); 
@@ -591,47 +604,60 @@ void shutdownCallback(){
       Serial.println(F(": shutdownCallback starts"));
     #endif
 
-    //messenger->setShuttingDown(true);
+  if(isSkipAlarmOn()){
+    #ifdef _DEBUG_
+      Serial.print(millis());
+      Serial.println(F(": shutdownCallback skipAlarm on, cancelling shutdown"));
+    #endif
+        messenger->setShuttingDown(false); // Call again to update shutting down at millis
+        tSorterPoweroff.disable();
+        tShutdown.setInterval(TASK_IMMEDIATE);
+        tShutdown.disable();
+        messenger->setShuttingDown(false);
+  } else {
 
-    if(hatch->isHatchFullyClosed()){
-      #ifdef _DEBUG_
-        Serial.print(millis());
-        Serial.println(F(": shutdownCallback Hatch closed, enable poweroff after delay."));
-      #endif
+      //messenger->setShuttingDown(true);
 
-      hatch->stop(false);
+      if(hatch->isHatchFullyClosed()){
+        #ifdef _DEBUG_
+          Serial.print(millis());
+          Serial.println(F(": shutdownCallback Hatch closed, enable poweroff after delay."));
+        #endif
 
-      // Poweroff sorter, once hatch closed, with delay
-      messenger->setShuttingDown(true); // Call again to update shutting down at millis
-      tSorterPoweroff.setIterations(1);
-      tSorterPoweroff.setCallback(&motorPoweroffCallback);
-      tSorterPoweroff.setInterval(poweroffdelayfromhatchcloseS * TASK_SECOND);
-      tSorterPoweroff.enableDelayed();
+        hatch->stop(false);
 
-      tShutdown.disable();
-      tShutdown.setInterval(TASK_IMMEDIATE);
-      tShutdown.disable();
+        // Poweroff sorter, once hatch closed, with delay
+        messenger->setShuttingDown(true); // Call again to update shutting down at millis
+        tSorterPoweroff.setIterations(1);
+        tSorterPoweroff.setCallback(&motorPoweroffCallback);
+        tSorterPoweroff.setInterval(poweroffdelayfromhatchcloseS * TASK_SECOND);
+        tSorterPoweroff.enableDelayed();
 
-    } else if(hatch->isClosing()){
-      // Do nothing but wait again for closure
-      tShutdown.setInterval(poweroffhatchclosedpollintms * TASK_MILLISECOND);
-      tShutdown.setIterations(TASK_FOREVER);
-      tShutdown.enableDelayed();
+        tShutdown.disable();
+        tShutdown.setInterval(TASK_IMMEDIATE);
+        tShutdown.disable();
 
-    } else { // Hatch is not closing, so close now
-      #ifdef _DEBUG_
-        Serial.print(millis());
-        Serial.println(F(": shutdownCallback Hatch not closed, start closing."));
-      #endif
+      } else if(hatch->isClosing()){
+        // Do nothing but wait again for closure
+        tShutdown.setInterval(poweroffhatchclosedpollintms * TASK_MILLISECOND);
+        tShutdown.setIterations(TASK_FOREVER);
+        tShutdown.enableDelayed();
 
-      // Close hatch
-      hatch->setTargetCount(hatch_hall_count_when_hatch_closed);
-      hatch->startClosing(false);
+      } else { // Hatch is not closing, so close now
+        #ifdef _DEBUG_
+          Serial.print(millis());
+          Serial.println(F(": shutdownCallback Hatch not closed, start closing."));
+        #endif
 
-      tShutdown.setInterval(poweroffhatchclosedpollintms * TASK_MILLISECOND);
-      tShutdown.setIterations(TASK_FOREVER);
-      tShutdown.enableDelayed();
-    }
+        // Close hatch
+        hatch->setTargetCount(hatch_hall_count_when_hatch_closed);
+        hatch->startClosing(false);
+
+        tShutdown.setInterval(poweroffhatchclosedpollintms * TASK_MILLISECOND);
+        tShutdown.setIterations(TASK_FOREVER);
+        tShutdown.enableDelayed();
+      }
+  }
 }
 
 void motorPoweroffCallback(){
@@ -639,6 +665,19 @@ void motorPoweroffCallback(){
     Serial.print(millis());
     Serial.println(F(": motorPoweroffCallback begin"));
   #endif
+
+  if(isSkipAlarmOn()){
+    #ifdef _DEBUG_
+      Serial.print(millis());
+      Serial.println(F(": motorPoweroffCallback skipAlarm on, cancelling shutdown"));
+    #endif
+        messenger->setShuttingDown(false); // Call again to update shutting down at millis
+        tSorterPoweroff.disable();
+        tShutdown.setInterval(TASK_IMMEDIATE);
+        tShutdown.disable();
+        messenger->setShuttingDown(false);
+  } else {
+
     // Set sorterStarted to false and clear potential alarms;
     sorterStarted = false;
     messenger->setSorterStarted(false);
@@ -650,7 +689,7 @@ void motorPoweroffCallback(){
     tSorterPoweroff.setInterval(elevatorpowerofffrommotoroffS * TASK_SECOND);
     tSorterPoweroff.setIterations(1);
     tSorterPoweroff.enableDelayed();
-  
+  }
   #ifdef _DEBUG_
     Serial.print(millis());
     Serial.println(F(": motorPoweroffCallback end"));
@@ -814,6 +853,18 @@ boolean isRunningFine(){
       }
     #endif    
 
+    // Reset shutting down if all good and skip alarm on:
+    if(retval && isSkipAlarmOn() && tSorterPoweroff.isEnabled()){
+      #ifdef _DEBUG_
+        Serial.print(millis());
+        Serial.println(F(": isRunningFine skipAlarm on, running fine, cancelling shutdown"));
+      #endif
+          messenger->setShuttingDown(false); // Call again to update shutting down at millis
+          tSorterPoweroff.disable();
+          tShutdown.setInterval(TASK_IMMEDIATE);
+          tShutdown.disable();     
+    }
+
   return retval;
 }
 
@@ -858,7 +909,7 @@ void statusUpdateCompletedCallback(){
       } else {
         #ifdef _DEBUG_
           Serial.print(millis());
-          Serial.println(F("Not running fine, but skip alarm on, so not shutting down!"));
+          Serial.println(F("Not running fine, but skip alarm on, so not shutting down! Alarm cleared!"));
         #endif         
       }
     }

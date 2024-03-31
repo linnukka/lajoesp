@@ -280,6 +280,7 @@ void LajoMessenger::setShuttingDown(boolean shutting){
         //}
     } else {
         _shutdownAtMillis = 0;
+        _shutReason = "";
     }
 }
 void LajoMessenger::clearTrioriAlarm(){_trioriAlarm = false;}
